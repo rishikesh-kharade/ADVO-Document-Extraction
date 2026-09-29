@@ -1,5 +1,34 @@
 import re
 
+def is_plausible_person_name(name: str | None) -> bool:
+    """
+    Check whether OCR-extracted text has the basic structure
+    expected from a person's name.
+    """
+    if not name:
+        return False
+
+    name = name.strip()
+
+    if not name:
+        return False
+
+    words = re.findall(
+        r"[A-Za-z]+",
+        name,
+    )
+
+    if len(words) < 2:
+        return False
+
+    if any(
+        len(word) < 2
+        for word in words
+    ):
+        return False
+
+    return True
+
 from .models import PanCardData, AadhaarData, BankPassbookData, CancelledChequeData
 
 PAN_PATTERN = re.compile(
@@ -40,8 +69,8 @@ def extract_pan(ocr_text: str) -> PanCardData:
         return " ".join(words).upper() if words else None
 
     def value_after_label(
-        index: int,
-        label_match: re.Match[str],
+            index: int,
+            label_match: re.Match[str],
     ) -> str | None:
         inline_value = lines[index][
             label_match.end():
@@ -51,11 +80,26 @@ def extract_pan(ocr_text: str) -> PanCardData:
             inline_value,
         )
 
-        if cleaned_inline_value:
+        if (
+                cleaned_inline_value
+                and is_plausible_person_name(
+            cleaned_inline_value
+        )
+        ):
             return cleaned_inline_value
 
         if index + 1 < len(lines):
-            return clean_name(lines[index + 1])
+            next_line = clean_name(
+                lines[index + 1]
+            )
+
+            if (
+                    next_line
+                    and is_plausible_person_name(
+                next_line
+            )
+            ):
+                return next_line
 
         return None
 
@@ -75,6 +119,11 @@ def extract_pan(ocr_text: str) -> PanCardData:
                     index,
                     father_match,
                 )
+
+                #If the OCR label is present but the value was not captured on the same line, use the next line.
+                if father_name is None and index + 1 < len(lines):
+                    father_name = clean_name(lines[index + 1])
+
                 continue
 
         if name is None and "father" not in line.lower():
@@ -89,6 +138,51 @@ def extract_pan(ocr_text: str) -> PanCardData:
                     index,
                     name_match,
                 )
+            if name is None:
+                words = re.findall(
+                    r"[A-Za-z]+",
+                    line,
+                )
+
+                if 2 <= len(words) <= 5:
+                    candidate_name = " ".join(
+                        words
+                    ).upper()
+
+                    ignored_words = {
+                        "INCOME",
+                        "TAX",
+                        "DEPARTMENT",
+                        "GOVT",
+                        "GOVERNMENT",
+                        "OF",
+                        "INDIA",
+                        "PERMANENT",
+                        "ACCOUNT",
+                        "NUMBER",
+                        "CARD",
+                        "FATHER",
+                        "NAME",
+                        "DATE",
+                        "BIRTH",
+                        "APPLICATION",
+                        "DIGITAL",
+                        "SIGNED",
+                        "PHYSICALLY",
+                        "VALID",
+                        "UNLESS",
+                    }
+
+                    if not any(
+                            word.upper() in ignored_words
+                            for word in words
+                    ):
+                        if is_plausible_person_name(
+                                candidate_name
+                        ):
+                            name = candidate_name
+
+
 
     dob_match = re.search(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b",
@@ -183,17 +277,19 @@ def extract_aadhaar(ocr_text: str) -> AadhaarData:
 
             name = clean_person_name(name_value)
 
-        elif gender is None and re.match(
-            r"^Gender\s*:",
+        elif gender is None and re.search(
+            r"\bGender\b",
             line,
             re.IGNORECASE,
         ):
-            gender = re.sub(
-                r"^Gender\s*:\s*",
-                "",
+            gender_match = re.search(
+                r"\bGender\s*[:\-]?\s*(Male|Female|Transgender)\b",
                 line,
-                flags=re.IGNORECASE,
-            ).strip().title()
+                re.IGNORECASE,
+            )
+
+            if gender_match:
+                gender = gender_match.group(1).title()
 
         elif address is None and re.match(
             r"^Address\s*:",
@@ -218,31 +314,20 @@ def extract_aadhaar(ocr_text: str) -> AadhaarData:
             name = clean_person_name(line)
 
     if address is None:
-        for index, line in enumerate(lines):
-            is_address_start = re.search(
-                r"(?:[SDWC$]\s*/\s*O)\s*:",
-                line,
-                re.IGNORECASE,
-            )
+        address_lines = []
 
-            if not is_address_start:
-                continue
+        for line in lines:
+            upper_line = line.upper()
 
-            address_lines = []
+            if (
+                "PRADESH" in upper_line
+                or re.search(
+                    r"\b\d{6}\b", line)
+            ):
+                address_lines.append(line)
 
-            for address_line in lines[index:]:
-                if re.search(
-                    aadhaar_pattern,
-                    address_line,
-                ):
-                    break
-
-                address_lines.append(address_line)
-
-            if address_lines:
-                address = ", ".join(address_lines)
-
-            break
+        if address_lines:
+            address = ", ".join(address_lines)
 
     dob_match = re.search(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b",
@@ -454,6 +539,7 @@ def extract_cancelled_cheque(
     for line in lines:
         lower_line = line.lower()
 
+
         account_label_match = re.search(
             r"\b(?:account|a/c|ac)\s*"
             r"(?:number|no\.?)\b",
@@ -473,15 +559,22 @@ def extract_cancelled_cheque(
             if 9 <= len(digits) <= 18:
                 account_number = digits
 
-        if ifsc is None and "ifsc" in lower_line:
+
+        if ifsc is None:
+            normalized_line = line.upper()
+
             ifsc_match = re.search(
-                r"[A-Z]{4}0[A-Z0-9]{6}",
-                line,
-                re.IGNORECASE,
+                r"[A-Z]{4}[0O][A-Z0-9]{6}",
+                normalized_line,
             )
 
             if ifsc_match:
-                ifsc = ifsc_match.group(0).upper()
+                ifsc = (
+                    ifsc_match
+                    .group(0)
+                    .replace("O", "0")
+                )
+
 
         if bank_name is None:
             bank_name_match = re.match(
@@ -491,17 +584,26 @@ def extract_cancelled_cheque(
             )
 
             if bank_name_match:
-                bank_name = bank_name_match.group(
-                    1
-                ).strip().upper()
+                bank_name = (
+                    bank_name_match
+                    .group(1)
+                    .strip()
+                    .upper()
+                )
 
             elif "state bank of india" in lower_line:
                 bank_name = "STATE BANK OF INDIA"
 
+
         if account_holder_name is None:
+
+            # Labelled format:
+            # Account Holder: RISHIKESH KHARADE
+            # Account Holder Name: RISHIKESH KHARADE
+            # Customer Name: RISHIKESH KHARADE
             name_label_match = re.search(
                 r"(?:account\s+holder(?:\s+name)?|"
-                r"account\s+holder)\s*:",
+                r"customer\s+name)\s*:",
                 line,
                 re.IGNORECASE,
             )
@@ -511,32 +613,41 @@ def extract_cancelled_cheque(
                     name_label_match.end():
                 ]
 
-                account_holder_name = clean_person_name(
-                    value_part
+                account_holder_name = (
+                    clean_person_name(value_part)
                 )
 
             else:
-                relation_match = re.match(
-                    r"^([A-Z][A-Z\s]+?)\s+"
+                # Cheque-style format:
+                # ISHFAQ AHMAD S/O MOHD SHAFI
+                relation_match = re.search(
+                    r"\b([A-Z][A-Z\s]+?)\s+"
                     r"(?:S/O|D/O|W/O|C/O)\b",
                     line,
                     re.IGNORECASE,
                 )
 
                 if relation_match:
-                    account_holder_name = clean_person_name(
-                        relation_match.group(1)
+                    account_holder_name = (
+                        clean_person_name(
+                            relation_match.group(1)
+                        )
                     )
+
 
     if account_number is None:
         for line in lines:
-            digits_only = re.sub(r"\D", "", line)
+            digit_groups = re.findall(
+                r"\d+",
+                line,
+            )
 
-            if (
-                line.strip() == digits_only
-                and 9 <= len(digits_only) <= 18
-            ):
-                account_number = digits_only
+            for group in digit_groups:
+                if 9 <= len(group) <= 18:
+                    account_number = group
+                    break
+
+            if account_number is not None:
                 break
 
     return CancelledChequeData(
