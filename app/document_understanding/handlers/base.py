@@ -1,16 +1,22 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from pydantic import BaseModel
-
-
-class DocumentHandlerResult(BaseModel):
-    extracted_data: dict | None = None
-    validation: dict = {}
-    ocr_text: str | None = None
+from app.document_understanding.models.documents import (
+    DocumentHandlerResult,
+)
+from app.document_understanding.ocr.base import (
+    OCRProvider,
+)
 
 
 class DocumentHandler(ABC):
+
+    def __init__(
+        self,
+        ocr: OCRProvider,
+    ) -> None:
+
+        self.ocr = ocr
 
     @abstractmethod
     def process(

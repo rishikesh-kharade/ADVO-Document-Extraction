@@ -1,21 +1,27 @@
 from fastapi import FastAPI
 
-from app.api.routes.documents import router as documents_router
+from app.api.documents import router
 
 
 app = FastAPI(
     title="ADVO Document Verification API",
-    description="Automated Document Verification and Onboarding System",
     version="1.0.0",
+    description=(
+        "Automated document classification, "
+        "OCR, extraction and validation using "
+        "Gemini 3.8 Flash."
+    ),
 )
 
 
-app.include_router(documents_router)
+app.include_router(
+    router
+)
 
 
 @app.get("/health")
-def health_check():
+async def health():
+
     return {
-        "status": "ok",
-        "service": "ADVO Document Verification API",
+        "status": "healthy"
     }

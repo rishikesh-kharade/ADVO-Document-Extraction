@@ -1,26 +1,63 @@
-from app.document_understanding.classification.document_registry import (
+from app.document_understanding.models.documents import DocumentType
+from app.document_understanding.registry import (
     DOCUMENT_REGISTRY,
-get_document_definition
+    get_document_definition,
 )
 
 
 def test_supported_documents_are_registered():
-    assert "PAN_CARD" in DOCUMENT_REGISTRY
-    assert "AADHAAR_CARD" in DOCUMENT_REGISTRY
-    assert "BANK_PASSBOOK" in DOCUMENT_REGISTRY
-    assert "CANCELLED_CHEQUE" in DOCUMENT_REGISTRY
+    expected_documents = {
+        DocumentType.PAN_CARD,
+        DocumentType.AADHAAR_CARD,
+        DocumentType.BANK_PASSBOOK,
+        DocumentType.CANCELLED_CHEQUE,
+    }
+
+    assert expected_documents.issubset(
+        DOCUMENT_REGISTRY.keys()
+    )
 
 
 def test_supported_documents_are_marked_supported():
-    assert DOCUMENT_REGISTRY["PAN_CARD"].supported is True
-    assert DOCUMENT_REGISTRY["AADHAAR_CARD"].supported is True
-    assert DOCUMENT_REGISTRY["BANK_PASSBOOK"].supported is True
-    assert DOCUMENT_REGISTRY["CANCELLED_CHEQUE"].supported is True
+    supported_documents = {
+        DocumentType.PAN_CARD,
+        DocumentType.AADHAAR_CARD,
+        DocumentType.BANK_PASSBOOK,
+        DocumentType.CANCELLED_CHEQUE,
+    }
+
+    for document_type in supported_documents:
+        definition = get_document_definition(
+            document_type
+        )
+
+        assert definition is not None
+        assert definition.document_type == document_type
+        assert definition.supported is True
 
 
 def test_get_document_definition():
-    document = get_document_definition("PAN_CARD")
+    definition = get_document_definition(
+        DocumentType.PAN_CARD
+    )
 
-    assert document is not None
-    assert document.name == "PAN_CARD"
-    assert document.supported is True
+    assert definition is not None
+    assert definition.document_type == DocumentType.PAN_CARD
+    assert definition.name == "PAN Card"
+    assert definition.supported is True
+
+
+def test_unsupported_document_is_not_registered():
+    assert (
+        get_document_definition(
+            DocumentType.UNKNOWN
+        )
+        is None
+    )
+
+    assert (
+        get_document_definition(
+            DocumentType.UNSUPPORTED
+        )
+        is None
+    )

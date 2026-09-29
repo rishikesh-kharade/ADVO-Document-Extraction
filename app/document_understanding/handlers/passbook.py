@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from app.document_understanding.extractors.pan import (
-    extract_pan,
+from app.document_understanding.extractors.passbook import (
+    extract_passbook,
 )
 from app.document_understanding.handlers.base import (
     DocumentHandler,
@@ -10,12 +10,13 @@ from app.document_understanding.models.documents import (
     DocumentHandlerResult,
     ValidationResult,
 )
-from app.document_understanding.validators.pan import (
-    validate_pan_number,
+from app.document_understanding.validators.passbook import (
+    validate_account_number,
+    validate_ifsc,
 )
 
 
-class PanDocumentHandler(
+class PassbookDocumentHandler(
     DocumentHandler
 ):
 
@@ -28,18 +29,30 @@ class PanDocumentHandler(
             file_path
         )
 
-        document = extract_pan(
+        document = extract_passbook(
             ocr_result.text
         )
 
-        pan_valid = validate_pan_number(
-            document.pan_number
+        account_valid = (
+            validate_account_number(
+                document.account_number
+            )
+        )
+
+        ifsc_valid = validate_ifsc(
+            document.ifsc
+        )
+
+        overall_valid = (
+            account_valid
+            and ifsc_valid
         )
 
         validation = ValidationResult(
-            valid=pan_valid,
+            valid=overall_valid,
             fields={
-                "pan_number": pan_valid,
+                "account_number": account_valid,
+                "ifsc": ifsc_valid,
             },
         )
 

@@ -1,22 +1,23 @@
 DOCUMENT_CLASSIFICATION_PROMPT = """
-Identify the document type in this image.
+You are a document classification system.
 
-Return the actual document type you see in the image.
+Identify the type of document shown in the supplied image or PDF.
 
-Examples of document types include:
-- PAN_CARD
-- AADHAAR_CARD
-- BANK_PASSBOOK
-- CANCELLED_CHEQUE
-- PASSPORT
-- DRIVING_LICENSE
-- VOTER_ID
-- Any other clearly identifiable document type
+Supported document types:
 
-If the document cannot be identified with reasonable confidence, return:
-UNKNOWN
+1. PAN_CARD
+2. AADHAAR_CARD
+3. BANK_PASSBOOK
+4. CANCELLED_CHEQUE
 
-Return only the document type using the provided JSON schema.
+Rules:
 
-Do not identify any individual fields or personal information.
+- Identify the actual document type from visible evidence.
+- Do not extract personal information.
+- Do not guess.
+- If the document cannot be confidently identified, return UNKNOWN.
+- A generic cheque should not be classified as CANCELLED_CHEQUE
+  unless there is sufficient visual evidence that it is a cancelled cheque.
+- A bank statement should not be classified as BANK_PASSBOOK.
+- A passport, driving licence, voter ID, etc. should be UNSUPPORTED.
 """

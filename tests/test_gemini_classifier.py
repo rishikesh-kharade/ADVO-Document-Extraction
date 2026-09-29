@@ -1,44 +1,83 @@
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from app.document_understanding.classification.gemini_classifier import (
+    GeminiClassificationResponse,
     GeminiDocumentClassifier,
 )
+from app.document_understanding.models.documents import DocumentType
 
-from app.document_understanding.classification.gemini_response import (
-    GeminiClassificationResponse,
-)
 
-@patch(
-    "app.document_understanding.classification.gemini_classifier.Path.read_bytes"
-)
-@patch(
-    "app.document_understanding.classification.gemini_classifier.genai.Client"
-)
-def test_gemini_classifies_pan_card(mock_client, mock_read_bytes):
-    mock_read_bytes.return_value = b"fake-image-data"
+def create_test_file(tmp_path: Path, filename: str) -> Path:
+    file_path = tmp_path / filename
+    file_path.write_bytes(b"fake document content")
+    return file_path
 
-    mock_interaction = MagicMock()
-    mock_interaction.output_text = '{"document_type": "PAN_CARD"}'
 
-    mock_client.return_value.interactions.create.return_value = (
-        mock_interaction
+def test_gemini_classifier_returns_pan(tmp_path):
+    file_path = create_test_file(tmp_path, "sample_pan.jpg")
+
+    mock_response = MagicMock()
+    mock_response.parsed = GeminiClassificationResponse(
+        document_type=DocumentType.PAN_CARD
     )
 
     with patch(
-        "app.document_understanding.classification.gemini_classifier.GEMINI_API_KEY",
-        "test-api-key",
-    ):
+        "app.document_understanding.classification.gemini_classifier.genai.Client"
+    ) as mock_client:
+
+        mock_client.return_value.models.generate_content.return_value = (
+            mock_response
+        )
+
         classifier = GeminiDocumentClassifier()
+        result = classifier.classify(file_path)
 
-    result = classifier.classify("dummy.jpg")
-
-    assert result.document_type == "PAN_CARD"
+    assert result.document_type == DocumentType.PAN_CARD
     assert result.supported is True
 
 
-def test_gemini_classification_response():
-    response = GeminiClassificationResponse(
-        document_type="PAN_CARD"
+def test_gemini_classifier_returns_aadhaar(tmp_path):
+    file_path = create_test_file(tmp_path, "sample_aadhaar.jpg")
+
+    mock_response = MagicMock()
+    mock_response.parsed = GeminiClassificationResponse(
+        document_type=DocumentType.AADHAAR_CARD
     )
 
-    assert response.document_type == "PAN_CARD"
+    with patch(
+        "app.document_understanding.classification.gemini_classifier.genai.Client"
+    ) as mock_client:
+
+        mock_client.return_value.models.generate_content.return_value = (
+            mock_response
+        )
+
+        classifier = GeminiDocumentClassifier()
+        result = classifier.classify(file_path)
+
+    assert result.document_type == DocumentType.AADHAAR_CARD
+    assert result.supported is True
+
+
+def test_gemini_classifier_returns_unknown(tmp_path):
+    file_path = create_test_file(tmp_path, "unknown.jpg")
+
+    mock_response = MagicMock()
+    mock_response.parsed = GeminiClassificationResponse(
+        document_type=DocumentType.UNKNOWN
+    )
+
+    with patch(
+        "app.document_understanding.classification.gemini_classifier.genai.Client"
+    ) as mock_client:
+
+        mock_client.return_value.models.generate_content.return_value = (
+            mock_response
+        )
+
+        classifier = GeminiDocumentClassifier()
+        result = classifier.classify(file_path)
+
+    assert result.document_type == DocumentType.UNKNOWN
+    assert result.supported is False

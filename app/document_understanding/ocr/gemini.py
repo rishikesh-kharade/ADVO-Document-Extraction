@@ -1,7 +1,6 @@
 from pathlib import Path
 import mimetypes
 
-from pydantic import BaseModel
 from google import genai
 from google.genai import types
 
@@ -10,28 +9,18 @@ from app.config.settings import (
     GEMINI_MODEL,
     GEMINI_THINKING_LEVEL,
 )
-from app.document_understanding.classification.base import (
-    DocumentClassifier,
-)
-from app.document_understanding.classification.prompts import (
-    DOCUMENT_CLASSIFICATION_PROMPT,
-)
 from app.document_understanding.models.documents import (
-    ClassificationResult,
-    DocumentType,
+    OCRResult,
 )
-from app.document_understanding.registry import (
-    get_document_definition,
+from app.document_understanding.ocr.base import (
+    OCRProvider,
 )
 
 
-class GeminiClassificationResponse(BaseModel):
-    document_type: DocumentType
+from app.document_understanding.ocr.prompts import GEMINI_OCR_PROMPT
 
 
-class GeminiDocumentClassifier(
-    DocumentClassifier
-):
+class GeminiOCR(OCRProvider):
 
     def __init__(
         self,
@@ -70,10 +59,10 @@ class GeminiDocumentClassifier(
             mime_type=mime_type,
         )
 
-    def classify(
+    def extract_text(
         self,
         file_path: str | Path,
-    ) -> ClassificationResult:
+    ) -> OCRResult:
 
         path = Path(file_path)
 
@@ -89,14 +78,11 @@ class GeminiDocumentClassifier(
         response = self.client.models.generate_content(
             model=self.model,
             contents=[
-                DOCUMENT_CLASSIFICATION_PROMPT,
+                GEMINI_OCR_PROMPT,
                 file_part,
             ],
             config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=(
-                    GeminiClassificationResponse
-                ),
+                max_output_tokens=16000,
                 thinking_config=(
                     types.ThinkingConfig(
                         thinking_level=(
@@ -107,40 +93,17 @@ class GeminiDocumentClassifier(
             ),
         )
 
-        parsed = getattr(
+        text = getattr(
             response,
-            "parsed",
+            "text",
             None,
         )
 
-        if parsed is not None:
-            result = (
-                parsed
-                if isinstance(
-                    parsed,
-                    GeminiClassificationResponse,
-                )
-                else GeminiClassificationResponse.model_validate(
-                    parsed
-                )
-            )
-        else:
-            result = (
-                GeminiClassificationResponse.model_validate_json(
-                    response.text
-                )
+        if not text:
+            raise ValueError(
+                "Gemini OCR returned no text."
             )
 
-        definition = get_document_definition(
-            result.document_type
-        )
-
-        supported = (
-            definition is not None
-            and definition.supported
-        )
-
-        return ClassificationResult(
-            document_type=result.document_type,
-            supported=supported,
+        return OCRResult(
+            text=text.strip()
         )

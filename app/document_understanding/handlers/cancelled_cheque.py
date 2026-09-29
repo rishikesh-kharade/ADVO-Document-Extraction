@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from app.document_understanding.extractors.pan import (
-    extract_pan,
+from app.document_understanding.extractors.cancelled_cheque import (
+    extract_cancelled_cheque,
 )
 from app.document_understanding.handlers.base import (
     DocumentHandler,
@@ -10,12 +10,12 @@ from app.document_understanding.models.documents import (
     DocumentHandlerResult,
     ValidationResult,
 )
-from app.document_understanding.validators.pan import (
-    validate_pan_number,
+from app.document_understanding.validators.cancelled_cheque import (
+    validate_cancelled_cheque_fields,
 )
 
 
-class PanDocumentHandler(
+class CancelledChequeDocumentHandler(
     DocumentHandler
 ):
 
@@ -28,19 +28,23 @@ class PanDocumentHandler(
             file_path
         )
 
-        document = extract_pan(
+        document = extract_cancelled_cheque(
             ocr_result.text
         )
 
-        pan_valid = validate_pan_number(
-            document.pan_number
+        validation_fields = (
+            validate_cancelled_cheque_fields(
+                document
+            )
+        )
+
+        overall_valid = all(
+            validation_fields.values()
         )
 
         validation = ValidationResult(
-            valid=pan_valid,
-            fields={
-                "pan_number": pan_valid,
-            },
+            valid=overall_valid,
+            fields=validation_fields,
         )
 
         return DocumentHandlerResult(
