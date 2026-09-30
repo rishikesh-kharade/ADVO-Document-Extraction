@@ -11,8 +11,8 @@ from app.document_understanding.handlers.registry import get_handler
 from app.document_understanding.models.documents import (
     DocumentProcessingResponse,
 )
-from app.document_understanding.ocr.base import OCRProvider
-from app.document_understanding.ocr.gemini import GeminiOCR
+from app.document_understanding.ocr.base import OCRProvider, OCRProcessingError
+from app.document_understanding.ocr.paddle import PaddleOCRProvider
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class DocumentProcessingService:
         ocr: OCRProvider | None = None,
     ) -> None:
         self.classifier = classifier or GeminiDocumentClassifier()
-        self.ocr = ocr or GeminiOCR()
+        self.ocr = ocr or PaddleOCRProvider()
 
     def process_document(
         self,
@@ -78,15 +78,20 @@ class DocumentProcessingService:
 
         try:
             result = handler.process(file_path)
-
-        except ServerError as exc:
-            logger.exception(
-                "Gemini OCR service error."
+        except OCRProcessingError as exc:
+            logger.warning(
+                "OCR could not extract readable text from document: %s",
+                file_path,
             )
 
-            raise DocumentProcessingUnavailableError(
-                "The document processing service is temporarily unavailable."
-            ) from exc
+            return DocumentProcessingResponse(
+                success=False,
+                document_type=classification.document_type,
+                supported=True,
+                message=str(exc),
+            )
+
+
 
         return DocumentProcessingResponse(
             success=True,

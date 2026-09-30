@@ -5,6 +5,8 @@ from app.document_understanding.models.documents import (
     OCRResult,
 )
 
+class OCRProcessingError(Exception):
+    """Raised when OCR cannot produce usable text."""
 
 class OCRProvider(ABC):
 

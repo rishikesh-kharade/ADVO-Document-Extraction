@@ -104,10 +104,9 @@ def extract_pan(
                 line,
                 re.IGNORECASE,
         ):
-            value = _extract_value_after_label(
+            value = _extract_pan_name_after_label(
                 lines,
                 index,
-                r"father(?:['’]s)?\s+name",
             )
 
             father_name = _clean_name(value)
@@ -167,3 +166,51 @@ def extract_pan(
         dob=dob,
         date_of_issue=date_of_issue,
     )
+
+def _extract_pan_name_after_label(
+    lines: list[str],
+    index: int,
+) -> str | None:
+    line = lines[index]
+
+    match = re.search(
+        r"father(?:['’]s)?\s+name",
+        line,
+        re.IGNORECASE,
+    )
+
+    if not match:
+        return None
+
+    # First check for a value on the same line.
+    inline_value = line[match.end():].strip(" :-")
+
+    if inline_value:
+        return inline_value
+
+    # Otherwise search the following lines for an English name.
+    for next_index in range(
+        index + 1,
+        min(index + 4, len(lines)),
+    ):
+        value = lines[next_index].strip()
+
+        if not value:
+            continue
+
+        # Skip Devanagari OCR noise.
+        if re.search(r"[\u0900-\u097F]", value):
+            continue
+
+        # Skip other PAN field labels.
+        if re.search(
+            r"date\s+of\s+(birth|issue)|signature|"
+            r"permanent\s+account\s+number",
+            value,
+            re.IGNORECASE,
+        ):
+            continue
+
+        return value
+
+    return None

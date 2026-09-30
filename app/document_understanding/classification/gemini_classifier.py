@@ -29,6 +29,29 @@ class GeminiClassificationResponse(BaseModel):
     document_type: DocumentType
 
 
+def _get_mime_type(file_path: Path) -> str:
+    mime_type, _ = mimetypes.guess_type(file_path.name)
+
+    if mime_type:
+        return mime_type
+
+    mime_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".pdf": "application/pdf",
+    }
+
+    mime_type = mime_types.get(file_path.suffix.lower())
+
+    if not mime_type:
+        raise ValueError(
+            f"Could not determine MIME type: {file_path}"
+        )
+
+    return mime_type
+
 class GeminiDocumentClassifier(
     DocumentClassifier
 ):
@@ -55,15 +78,7 @@ class GeminiDocumentClassifier(
         file_path: Path,
     ) -> types.Part:
 
-        mime_type, _ = mimetypes.guess_type(
-            file_path.name
-        )
-
-        if not mime_type:
-            raise ValueError(
-                f"Could not determine MIME type: "
-                f"{file_path}"
-            )
+        mime_type = _get_mime_type(file_path)
 
         return types.Part.from_bytes(
             data=file_path.read_bytes(),
