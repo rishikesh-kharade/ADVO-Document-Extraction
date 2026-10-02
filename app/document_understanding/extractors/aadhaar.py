@@ -59,6 +59,121 @@ def _extract_labeled_value(
     return None
 
 
+def _extract_name(lines: list[str]) -> str | None:
+    """Extract the person's name using Aadhaar-specific label/layout context."""
+
+    name_labels = (
+        "name",
+        "नाम",
+    )
+
+    excluded_patterns = (
+        "date of birth",
+        "dob",
+        "gender",
+        "address",
+        "mobile",
+        "aadhaar",
+        "aadhar",
+        "government",
+        "unique identification",
+        "enrolment",
+        "enrollment",
+        "help",
+        "www.",
+        "my aadhaar",
+        "माझे आधार",
+    )
+
+    # 1. Prefer an explicitly labelled name.
+    for index, line in enumerate(lines):
+        normalized = line.strip().lower()
+
+        if not any(label in normalized for label in name_labels):
+            continue
+
+        match = re.search(
+            r"(?:name|नाम)\s*(?:/|:|-)?\s*(?:name|नाम)?"
+            r"\s*[:\-]?\s*(.+)$",
+            line,
+            re.IGNORECASE,
+        )
+
+        if match:
+            candidate = _clean(match.group(1))
+
+            if candidate and candidate.lower() not in {"name", "नाम"}:
+                if not any(
+                    pattern in candidate.lower()
+                    for pattern in excluded_patterns
+                ):
+                    return candidate
+
+        # Name may be on the next line.
+        if index + 1 < len(lines):
+            candidate = _clean(lines[index + 1])
+
+            if not candidate:
+                continue
+
+            if any(
+                pattern in candidate.lower()
+                for pattern in excluded_patterns
+            ):
+                continue
+
+            if re.search(
+                r"(?:date of birth|dob|gender|address|aadhaar|aadhar|"
+                r"mobile|enrolment|enrollment|name|नाम)",
+                candidate,
+                re.IGNORECASE,
+            ):
+                continue
+
+            if re.search(r"[A-Za-z]", candidate):
+                return candidate
+
+    # 2. Aadhaar commonly places the English name immediately before DOB.
+    # Example:
+    # Vilas Rakhe
+    # जन्म तारीख/DOB: 30/05/1995
+    dob_index = None
+
+    for index, line in enumerate(lines):
+        if re.search(
+            r"(date\s+of\s+birth|\bdob\b|जन्म)",
+            line,
+            re.IGNORECASE,
+        ):
+            dob_index = index
+            break
+
+    if dob_index is not None:
+        for index in range(dob_index - 1, max(-1, dob_index - 4), -1):
+            candidate = _clean(lines[index])
+
+            if not candidate:
+                continue
+
+            if any(
+                pattern in candidate.lower()
+                for pattern in excluded_patterns
+            ):
+                continue
+
+            # Prefer the English/Latin representation when both
+            # regional-language and English names are present.
+            if re.search(r"[A-Za-z]", candidate):
+                if not re.search(
+                    r"(government|unique identification|aadhaar|aadhar)",
+                    candidate,
+                    re.IGNORECASE,
+                ):
+                    return candidate
+
+    return None
+
+
 def _extract_address(
     lines: list[str],
 ) -> str | None:
@@ -113,6 +228,10 @@ def _extract_address(
         "gender",
         "date of birth",
         "dob",
+        "details as on",
+        "vid",
+        "1947",
+        "help@",
     )
 
     for line in lines[start_index + 1:]:
@@ -151,8 +270,8 @@ def _extract_additional_fields(
     known_values: set[str | None],
 ) -> dict[str, str]:
     """
-    Preserve useful labeled information that is not represented
-    by the standard Aadhaar model fields.
+    Preserve only useful Aadhaar-specific additional information.
+    Currently VID is the supported additional field.
     """
 
     additional_fields: dict[str, str] = {}
@@ -163,29 +282,19 @@ def _extract_additional_fields(
         if not cleaned:
             continue
 
-        if cleaned in known_values:
-            continue
-
         match = re.match(
-            r"^\s*([A-Za-z][A-Za-z0-9 /()._-]{1,50})\s*[:\-]\s*(.+?)\s*$",
+            r"^\s*VID\s*[:\-]\s*(.+?)\s*$",
             cleaned,
+            re.IGNORECASE,
         )
 
         if not match:
             continue
 
-        label = re.sub(
-            r"\s+",
-            " ",
-            match.group(1),
-        ).strip()
+        value = _clean(match.group(1))
 
-        value = _clean(match.group(2))
-
-        if not value:
-            continue
-
-        additional_fields[label] = value
+        if value:
+            additional_fields["VID"] = value
 
     return additional_fields
 
@@ -211,59 +320,7 @@ def extract_aadhaar(
             aadhar_number = candidate
             break
 
-
-
-    name = _extract_labeled_value(
-        lines,
-        [
-            r"^\s*name\s*[:\-]?",
-            r"^\s*नाम\s*[:\-]?",
-        ],
-    )
-
-    if name is None:
-
-        if aadhar_number:
-            for index, line in enumerate(lines):
-                normalized_line = _clean_aadhaar(line)
-
-                if normalized_line != aadhar_number:
-                    continue
-
-                if index + 1 < len(lines):
-                    candidate = _clean(lines[index + 1])
-
-                    if candidate:
-                        # Do not accidentally treat another document field
-                        # as the person's name.
-                        excluded_patterns = (
-                            "date of birth",
-                            "dob",
-                            "gender",
-                            "address",
-                            "mobile",
-                            "aadhaar",
-                            "aadhar",
-                            "government",
-                            "unique identification",
-                        )
-
-                        if not any(
-                                pattern in candidate.lower()
-                                for pattern in excluded_patterns
-                        ):
-                            name = candidate
-
-                break
-
-    if name is None:
-        for index, line in enumerate(lines):
-            if line.lower().strip() == "to":
-                if index + 1 < len(lines):
-                    name = _clean(lines[index + 1])
-                break
-
-
+    name = _extract_name(lines)
 
     dob = _extract_labeled_value(
         lines,

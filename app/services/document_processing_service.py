@@ -12,7 +12,7 @@ from app.document_understanding.models.documents import (
     DocumentProcessingResponse,
 )
 from app.document_understanding.ocr.base import OCRProvider, OCRProcessingError
-from app.document_understanding.ocr.paddle import PaddleOCRProvider
+from app.document_understanding.ocr.factory import get_ocr_provider
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class DocumentProcessingService:
         ocr: OCRProvider | None = None,
     ) -> None:
         self.classifier = classifier or GeminiDocumentClassifier()
-        self.ocr = ocr or PaddleOCRProvider()
+        self.ocr = ocr or get_ocr_provider()
 
     def process_document(
         self,

@@ -50,7 +50,6 @@ class BankPassbookData(BaseModel):
         default_factory=dict
     )
 
-
 class CancelledChequeData(BaseModel):
     account_number: str | None = None
     ifsc: str | None = None
