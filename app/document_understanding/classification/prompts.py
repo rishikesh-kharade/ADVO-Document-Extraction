@@ -8,7 +8,7 @@ Supported document types:
 1. PAN_CARD
 2. AADHAAR_CARD
 3. BANK_PASSBOOK
-4. CANCELLED_CHEQUE
+4. CHEQUE
 
 Rules:
 
@@ -16,8 +16,20 @@ Rules:
 - Do not extract personal information.
 - Do not guess.
 - If the document cannot be confidently identified, return UNKNOWN.
-- A generic cheque should not be classified as CANCELLED_CHEQUE
-  unless there is sufficient visual evidence that it is a cancelled cheque.
+
+- Any bank cheque must be classified as CHEQUE regardless of its state.
+- This includes:
+  - blank cheque
+  - filled cheque
+  - partially filled cheque
+  - cancelled cheque
+  - cheque containing handwritten entries
+  - cheque containing only printed banking details
+
+- Do not create a separate document type for a cancelled cheque.
+- The presence or absence of the word "CANCELLED" does not determine the document type.
+- If the document is clearly a cheque, return CHEQUE.
+
 - A bank statement should not be classified as BANK_PASSBOOK.
 - A passport, driving licence, voter ID, etc. should be UNSUPPORTED.
 """

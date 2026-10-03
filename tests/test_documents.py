@@ -1,8 +1,8 @@
 from app.document_understanding.extractors.aadhaar import (
     extract_aadhaar,
 )
-from app.document_understanding.extractors.cancelled_cheque import (
-    extract_cancelled_cheque,
+from app.document_understanding.extractors.cheque import (
+    extract_cheque,
 )
 from app.document_understanding.extractors.pan import (
     extract_pan,
@@ -13,15 +13,15 @@ from app.document_understanding.extractors.passbook import (
 from app.document_understanding.models.documents import (
     AadhaarData,
     BankPassbookData,
-    CancelledChequeData,
+    ChequeData,
     PanCardData,
 )
 from app.document_understanding.validators.aadhaar import (
     validate_aadhaar_format,
     validate_aadhaar_verhoeff,
 )
-from app.document_understanding.validators.cancelled_cheque import (
-    validate_cancelled_cheque_fields,
+from app.document_understanding.validators.cheque import (
+    validate_cheque_fields,
 )
 from app.document_understanding.validators.pan import (
     validate_pan_number,
@@ -81,11 +81,20 @@ def test_extract_bank_passbook():
     ocr_text = """
     BANK PASSBOOK
 
-    Bank Name: STATE BANK OF INDIA
-    Branch: BENGALURU MAIN BRANCH
-    Account Holder Name: RISHIKESH KHARADE
-    Account Number: 123456789012
-    IFSC: SBIN0001234
+Bank Name
+STATE BANK OF INDIA
+
+Branch
+BENGALURU MAIN BRANCH
+
+Account Holder Name
+RISHIKESH KHARADE
+
+Account No
+123456789012
+
+IFSC
+SBIN0001234
     """
 
     result = extract_passbook(ocr_text)
@@ -98,9 +107,9 @@ def test_extract_bank_passbook():
     assert result.account_holder_name == "RISHIKESH KHARADE"
 
 
-def test_extract_cancelled_cheque():
+def test_extract_cheque():
     ocr_text = """
-    CANCELLED CHEQUE
+    CHEQUE
 
     Bank Name: STATE BANK OF INDIA
     Account Holder Name: RISHIKESH KHARADE
@@ -108,9 +117,9 @@ def test_extract_cancelled_cheque():
     IFSC: SBIN0001234
     """
 
-    result = extract_cancelled_cheque(ocr_text)
+    result = extract_cheque(ocr_text)
 
-    assert isinstance(result, CancelledChequeData)
+    assert isinstance(result, ChequeData)
     assert result.account_number == "123456789012"
     assert result.ifsc == "SBIN0001234"
     assert result.bank_name == "STATE BANK OF INDIA"
@@ -156,14 +165,14 @@ def test_validate_ifsc():
 
 
 def test_validate_cancelled_cheque_fields():
-    document = CancelledChequeData(
+    document = ChequeData(
         account_number="123456789012",
         ifsc="SBIN0001234",
         bank_name="STATE BANK OF INDIA",
         account_holder_name="RISHIKESH KHARADE",
     )
 
-    result = validate_cancelled_cheque_fields(document)
+    result = validate_cheque_fields(document)
 
     assert result["account_number"] is True
     assert result["ifsc"] is True

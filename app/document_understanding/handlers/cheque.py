@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from app.document_understanding.extractors.cancelled_cheque import (
-    extract_cancelled_cheque,
+from app.document_understanding.extractors.cheque import (
+    extract_cheque,
 )
 from app.document_understanding.handlers.base import (
     DocumentHandler,
@@ -10,12 +10,12 @@ from app.document_understanding.models.documents import (
     DocumentHandlerResult,
     ValidationResult,
 )
-from app.document_understanding.validators.cancelled_cheque import (
-    validate_cancelled_cheque_fields,
+from app.document_understanding.validators.cheque import (
+    validate_cheque_fields,
 )
 
 
-class CancelledChequeDocumentHandler(
+class ChequeDocumentHandler(
     DocumentHandler
 ):
 
@@ -28,18 +28,20 @@ class CancelledChequeDocumentHandler(
             file_path
         )
 
-        document = extract_cancelled_cheque(
+        document = extract_cheque(
             ocr_result.text
         )
 
         validation_fields = (
-            validate_cancelled_cheque_fields(
+            validate_cheque_fields(
                 document
             )
         )
 
-        overall_valid = all(
-            validation_fields.values()
+        overall_valid = (
+                validation_fields["account_number"]
+                and validation_fields["ifsc"]
+                and validation_fields["bank_name"]
         )
 
         validation = ValidationResult(

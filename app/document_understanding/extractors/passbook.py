@@ -109,13 +109,21 @@ def _extract_bank_name(lines: list[str]) -> str | None:
     return None
 
 
-def _extract_account_number(lines: list[str]) -> str | None:
+def _extract_account_number(
+    lines: list[str],
+) -> str | None:
     """
-    Prefer explicitly labelled account numbers so CIF,
-    MICR and other numeric values are not accidentally selected.
+    Extract the account number.
+
+    Supports both:
+        Account No: 123456789012
+
+    and:
+        Account No
+        123456789012
     """
 
-    for line in lines:
+    for index, line in enumerate(lines):
         match = re.match(
             r"^\s*(?:account\s+number|"
             r"account\s+no\.?|"
@@ -128,6 +136,25 @@ def _extract_account_number(lines: list[str]) -> str | None:
 
         if match:
             return match.group(1)
+
+        label_match = re.match(
+            r"^\s*(?:account\s+number|"
+            r"account\s+no\.?|"
+            r"a/c\s+number|"
+            r"a/c\s+no\.?)"
+            r"\s*$",
+            line,
+            re.IGNORECASE,
+        )
+
+        if label_match and index + 1 < len(lines):
+            next_line = lines[index + 1].strip()
+
+            if re.fullmatch(
+                r"\d{9,18}",
+                next_line,
+            ):
+                return next_line
 
     return None
 
@@ -180,19 +207,22 @@ def _extract_micr(
 
 
 def _extract_customer_address(
-        lines: list[str],
+    lines: list[str],
 ) -> str | None:
     """
     Extract the customer address from the explicit Address section.
+
+    The customer address ends before the passbook's
+    subsequent metadata/branch section.
     """
 
     address_index = None
 
     for index, line in enumerate(lines):
         if re.match(
-                r"^\s*address\s*:",
-                line,
-                re.IGNORECASE,
+            r"^\s*address\s*:",
+            line,
+            re.IGNORECASE,
         ):
             address_index = index
             break
@@ -216,14 +246,18 @@ def _extract_customer_address(
         r"^phone\s*:",
         r"^email\s*:",
         r"^d\.?o\.?b",
-        r"^mop\.?",
-        r"^nom\.?",
+        r"^mop\.?\s*:",
+        r"^nom\.?\s*\.?\s*reg\.?\s*no\.?\s*:",
     )
 
     for line in lines[address_index + 1:]:
         if any(
-                re.search(pattern, line, re.IGNORECASE)
-                for pattern in stop_patterns
+            re.search(
+                pattern,
+                line,
+                re.IGNORECASE,
+            )
+            for pattern in stop_patterns
         ):
             break
 
@@ -232,7 +266,11 @@ def _extract_customer_address(
     if not address_lines:
         return None
 
-    return " ".join(address_lines).strip()
+    return " ".join(
+        line.strip(" ,")
+        for line in address_lines
+        if line.strip()
+    )
 
 
 def _find_branch_start(
@@ -241,53 +279,27 @@ def _find_branch_start(
     """
     Find the beginning of the branch section.
 
-    The OCR may place the branch section either before or after
-    Customer Name, so we use the structural boundary created by
-    S/D/W/H/o and Address instead of assuming a fixed order.
+    The branch section is usually located between the
+    Customer Name section and the S/D/W/H/o or Address section.
     """
-
-    address_index = None
-    relation_index = None
+    boundary_candidates: list[int] = []
 
     for index, line in enumerate(lines):
         if re.match(
-            r"^\s*address\s*:",
+            r"^\s*(?:s/d/w/h/o|address)\s*:",
             line,
             re.IGNORECASE,
         ):
-            address_index = index
-            break
-
-    for index, line in enumerate(lines):
-        if re.match(
-            r"^\s*s/d/w/h/o\s*:",
-            line,
-            re.IGNORECASE,
-        ):
-            relation_index = index
-            break
-
-    # The branch section is immediately before the
-    # S/D/W/H/o / Address section.
-    boundary_candidates = [
-        index
-        for index in (
-            relation_index,
-            address_index,
-        )
-        if index is not None
-    ]
+            boundary_candidates.append(index)
 
     if not boundary_candidates:
         return None
 
     boundary = min(boundary_candidates)
 
-    # Walk backwards until we find the first meaningful
-    # branch line after the account/customer header area.
+    # Walk backwards from the boundary and collect meaningful
+    # branch lines until we reach the account/customer header.
     start = boundary - 1
-
-    branch_lines: list[str] = []
 
     while start >= 0:
         line = lines[start].strip()
@@ -296,7 +308,7 @@ def _find_branch_start(
             start -= 1
             continue
 
-        # Stop at known header/metadata sections.
+        # Stop at the customer/account header.
         if re.search(
             r"^(?:customer\s+name|"
             r"account\s+no|"
@@ -308,26 +320,13 @@ def _find_branch_start(
             break
 
         if re.search(
-            r"^(?:a/c|account\s+number)",
+            r"^(?:a/c|account\s+number)\b",
             line,
             re.IGNORECASE,
         ):
             break
 
-        # Ignore relationship line if encountered.
-        if re.match(
-            r"^s/d/w/h/o\s*:",
-            line,
-            re.IGNORECASE,
-        ):
-            start -= 1
-            continue
-
-        branch_lines.insert(0, line)
         start -= 1
-
-    if not branch_lines:
-        return None
 
     return start + 1
 
@@ -335,26 +334,29 @@ def _find_branch_start(
 def _extract_branch(
     lines: list[str],
 ) -> str | None:
+
+    # Simple labelled format:
+    # Branch: Bengaluru Main Branch
+    # or:
+    # Branch
+    # Bengaluru Main Branch
+    simple_branch = _extract_label_value(
+        lines,
+        ["Branch Name", "Branch"],
+    )
+
+    if simple_branch:
+        return simple_branch
     """
     Extract branch name/address and branch code.
 
-    Example:
-
-        MANCHERIAL
-        HNO 18-649, MUKHARAMI
-        IB CHOWRAS
-        Phone:252598
-        Email:sbi.6267@sbi.co.in
-        Branch Code:6267
-
-    becomes:
-
-        MANCHERIAL, HNO 18-649, MUKHARAMI,
-        IB CHOWRAS, Branch Code: 6267
+    The branch section begins after the passbook metadata
+    section, typically after "Nom. Reg. No.", and ends
+    before branch contact/IFSC information.
     """
 
-    branch_code_index = None
     branch_code = None
+    branch_code_index = None
 
     # Find Branch Code.
     for index, line in enumerate(lines):
@@ -365,68 +367,66 @@ def _extract_branch(
         )
 
         if match:
-            branch_code_index = index
             branch_code = match.group(1).strip()
+            branch_code_index = index
             break
 
-    if branch_code_index is None or branch_code is None:
+    if branch_code_index is None:
         return None
 
-    # Find the nearest structural boundary before the branch section.
+    # Find the branch-section boundary.
     #
-    # In this passbook the structure is:
+    # Expected structure:
     #
-    # MOP
-    # Nom. Reg. No.
+    #   MOP.:SINGLE
+    #   Nom. Reg. No.:
     #
-    # MANCHERIAL
-    # HNO ...
-    # IB CHOWRAS
+    #   MANCHERIAL
+    #   HNO 18-649,MUKHARANI
+    #   IB CHOWRAS
     #
-    # Phone
-    # Email
-    # Branch Code
+    #   Phone:...
+    #   Email:...
+    #   Branch Code:6267
     #
-    boundary_index = None
-
-    boundary_patterns = (
-        r"^nom\.?\s*reg\.?\s*no\.?",
-        r"^mop\.?",
-        r"^d\.?o\.?b",
-        r"^address\s*:",
-        r"^s/d/w/h/o\s*:",
-        r"^customer\s+name\s*:",
-        r"^account\s+no\b",
-        r"^cif\s+no\b",
-        r"^savings\s+bank\s+account$",
-    )
+    branch_start = None
 
     for index in range(branch_code_index - 1, -1, -1):
         line = lines[index].strip()
 
-        if any(
-            re.search(pattern, line, re.IGNORECASE)
-            for pattern in boundary_patterns
+        if re.match(
+            r"^nom\.?\s*\.?\s*reg\.?\s*no\.?\s*:",
+            line,
+            re.IGNORECASE,
         ):
-            boundary_index = index
+            branch_start = index + 1
             break
 
-    # If we found a structural boundary, start after it.
-    if boundary_index is not None:
-        candidate_lines = lines[boundary_index + 1:branch_code_index]
-    else:
-        candidate_lines = lines[:branch_code_index]
+    # Fallback if Nom. Reg. No. is missing.
+    if branch_start is None:
+        for index in range(branch_code_index - 1, -1, -1):
+            line = lines[index].strip()
+
+            if re.match(
+                r"^mop\.?\s*:",
+                line,
+                re.IGNORECASE,
+            ):
+                branch_start = index + 1
+                break
+
+    if branch_start is None:
+        return f"Branch Code: {branch_code}"
 
     branch_lines: list[str] = []
 
-    for line in candidate_lines:
+    for line in lines[branch_start:branch_code_index]:
         line = line.strip()
 
         if not line:
             continue
 
-        # These belong to metadata around the branch section,
-        # not the branch itself.
+        # Branch contact information is not part of branch name/address.
         if re.match(
             r"^(?:phone|email)\s*:",
             line,
@@ -434,6 +434,7 @@ def _extract_branch(
         ):
             continue
 
+        # Ignore issue/date information.
         if re.match(
             r"^date\s+of\s+issue",
             line,
@@ -441,27 +442,31 @@ def _extract_branch(
         ):
             continue
 
+        # Ignore standalone date/reference lines.
+        if re.fullmatch(
+            r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?:\s+\d+)?",
+            line,
+        ):
+            continue
+
+        # Ignore branch manager information.
         if re.match(
-            r"^branch\s+manager",
+            r"^branch\s+manager\b",
             line,
             re.IGNORECASE,
         ):
             continue
 
+        # Ignore IFSC.
         if IFSC_PATTERN.search(line):
-            continue
-
-        if re.search(
-            r"^micr\s*:",
-            line,
-            re.IGNORECASE,
-        ):
             continue
 
         branch_lines.append(line)
 
     if branch_code:
-        branch_lines.append(f"Branch Code: {branch_code}")
+        branch_lines.append(
+            f"Branch Code: {branch_code}"
+        )
 
     if not branch_lines:
         return None

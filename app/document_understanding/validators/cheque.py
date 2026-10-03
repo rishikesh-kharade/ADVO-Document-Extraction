@@ -1,5 +1,5 @@
 from app.document_understanding.models.documents import (
-    CancelledChequeData,
+    ChequeData,
 )
 from app.document_understanding.validators.passbook import (
     validate_account_number,
@@ -7,8 +7,8 @@ from app.document_understanding.validators.passbook import (
 )
 
 
-def validate_cancelled_cheque_fields(
-    document: CancelledChequeData,
+def validate_cheque_fields(
+    document: ChequeData,
 ) -> dict[str, bool]:
 
     return {

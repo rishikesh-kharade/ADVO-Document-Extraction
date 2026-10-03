@@ -26,9 +26,9 @@ DOCUMENT_REGISTRY: dict[DocumentType, DocumentDefinition] = {
         name="Bank Passbook",
         supported=True,
     ),
-    DocumentType.CANCELLED_CHEQUE: DocumentDefinition(
-        document_type=DocumentType.CANCELLED_CHEQUE,
-        name="Cancelled Cheque",
+    DocumentType.CHEQUE: DocumentDefinition(
+        document_type=DocumentType.CHEQUE,
+        name="Cheque",
         supported=True,
     ),
 }

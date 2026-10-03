@@ -2,11 +2,9 @@ from pathlib import Path
 
 from app.document_understanding.models.documents import (
     ClassificationResult,
-    DocumentHandlerResult,
     DocumentProcessingResponse,
     DocumentType,
     OCRResult,
-    ValidationResult,
 )
 from app.services.document_processing_service import (
     DocumentProcessingService,
@@ -137,10 +135,10 @@ def test_service_routes_supported_passbook_to_handler():
     assert result.validation is not None
 
 
-def test_service_routes_supported_cancelled_cheque_to_handler():
+def test_service_routes_supported_cheque_to_handler():
     classifier = FakeClassifier(
         ClassificationResult(
-            document_type=DocumentType.CANCELLED_CHEQUE,
+            document_type=DocumentType.CHEQUE,
             supported=True,
         )
     )
@@ -156,6 +154,6 @@ def test_service_routes_supported_cancelled_cheque_to_handler():
 
     assert result.success is True
     assert result.supported is True
-    assert result.document_type == DocumentType.CANCELLED_CHEQUE
+    assert result.document_type == DocumentType.CHEQUE
     assert result.extracted_data is not None
     assert result.validation is not None

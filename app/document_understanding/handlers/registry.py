@@ -10,8 +10,8 @@ from app.document_understanding.handlers.aadhaar import (
 from app.document_understanding.handlers.passbook import (
     PassbookDocumentHandler,
 )
-from app.document_understanding.handlers.cancelled_cheque import (
-    CancelledChequeDocumentHandler,
+from app.document_understanding.handlers.cheque import (
+    ChequeDocumentHandler,
 )
 from app.document_understanding.models.documents import (
     DocumentType,
@@ -28,9 +28,7 @@ HANDLER_REGISTRY: dict[
     DocumentType.PAN_CARD: PanDocumentHandler,
     DocumentType.AADHAAR_CARD: AadhaarDocumentHandler,
     DocumentType.BANK_PASSBOOK: PassbookDocumentHandler,
-    DocumentType.CANCELLED_CHEQUE: (
-        CancelledChequeDocumentHandler
-    ),
+    DocumentType.CHEQUE: ChequeDocumentHandler,
 }
 
 

@@ -10,7 +10,7 @@ def test_supported_documents_are_registered():
         DocumentType.PAN_CARD,
         DocumentType.AADHAAR_CARD,
         DocumentType.BANK_PASSBOOK,
-        DocumentType.CANCELLED_CHEQUE,
+        DocumentType.CHEQUE,
     }
 
     assert expected_documents.issubset(
@@ -23,7 +23,7 @@ def test_supported_documents_are_marked_supported():
         DocumentType.PAN_CARD,
         DocumentType.AADHAAR_CARD,
         DocumentType.BANK_PASSBOOK,
-        DocumentType.CANCELLED_CHEQUE,
+        DocumentType.CHEQUE,
     }
 
     for document_type in supported_documents:

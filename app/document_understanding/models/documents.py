@@ -8,7 +8,7 @@ class DocumentType(str, Enum):
     PAN_CARD = "PAN_CARD"
     AADHAAR_CARD = "AADHAAR_CARD"
     BANK_PASSBOOK = "BANK_PASSBOOK"
-    CANCELLED_CHEQUE = "CANCELLED_CHEQUE"
+    CHEQUE = "CHEQUE"
     UNKNOWN = "UNKNOWN"
     UNSUPPORTED = "UNSUPPORTED"
 
@@ -50,12 +50,14 @@ class BankPassbookData(BaseModel):
         default_factory=dict
     )
 
-class CancelledChequeData(BaseModel):
+class ChequeData(BaseModel):
     account_number: str | None = None
     ifsc: str | None = None
     bank_name: str | None = None
     branch: str | None = None
     account_holder_name: str | None = None
+    date: str | None = None
+    amount: str | None = None
 
     additional_fields: dict[str, str] = Field(
         default_factory=dict
