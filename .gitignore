@@ -45,3 +45,5 @@ tests/data/aadhaar_sample
 tests/data/passbook_sample
 tests/data/cancelled_cheque_sample
 tests/data/ocr_variants/
+.vercel
+.env*

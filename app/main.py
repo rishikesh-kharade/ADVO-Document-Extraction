@@ -9,7 +9,7 @@ app = FastAPI(
     description=(
         "Automated document classification, "
         "OCR, extraction and validation using "
-        "Gemini 3.8 Flash."
+        "Gemini 3.6 Flash."
     ),
 )
 
